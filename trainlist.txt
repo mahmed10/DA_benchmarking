@@ -1,0 +1,4 @@
+./dataset/Rellis_3D_image_example/pylon_camera_node/frame000000-1581623790_349.jpg
+./dataset/Rellis_3D_image_example/pylon_camera_node/frame000000-1581624652_750.jpg
+./dataset/Rellis_3D_image_example/pylon_camera_node/frame000002-1581623790_549.jpg
+./dataset/Rellis_3D_image_example/pylon_camera_node/frame000002-1581624652_949.jpg
