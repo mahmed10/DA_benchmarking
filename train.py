@@ -1,7 +1,5 @@
 import os
 import argparse
-import numpy as np
-from PIL import Image
 
 import torch 
 import torch.optim as optim
@@ -9,12 +7,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 
-from torchvision import transforms, datasets, utils
 from tqdm import tqdm
 
 import data
 
-from model import UNET
+from models.unet import UNET
 
 
 parser = argparse.ArgumentParser(description='Benchmarking')
