@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms, datasets, utils
 from tqdm import tqdm
 
-from utils import get_cityscapes_data
+import data
 
 from model import UNET
 
@@ -56,7 +56,7 @@ def train(data, model, optimizer, loss_fn, device):
 def main():
 	global epoch
 	epoch = 0 
-	train_set = get_cityscapes_data(args.train_path_list, args.batch_size)
+	train_set = data.setup_loaders(args.train_path_list, args.batch_size)
 	print('Data Loaded Successfully!')
 	loss_vals = []
 

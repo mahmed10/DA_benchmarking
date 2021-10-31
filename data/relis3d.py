@@ -3,13 +3,10 @@ import numpy as np
 import torch
 from PIL import Image
 import yaml
-import data.edge_utils as edge_utils
 
-num_classes = 2
-ignore_label = 0
+from torchvision import transforms, datasets
 
 def colorize_mask(mask):
-	# mask: numpy array of the mask
 	new_mask = Image.fromarray(mask.astype(np.uint8)).convert('P')
 	new_mask.putpalette(palette)
 	return new_mask
@@ -36,8 +33,6 @@ class Relis3D(torch.utils.data.Dataset):
 
 		with open(path_list, "r") as file:
 			self.imgs = file.readlines()
-		#print("\nImage path files:")
-		#print(self.imgs)
 
 		self.masks = [
 			path.replace("/pylon_camera_node/", "/pylon_camera_node_label_id/")
@@ -45,8 +40,6 @@ class Relis3D(torch.utils.data.Dataset):
 			.replace(".jpg", ".png")
 			for path in self.imgs
 		]
-		#print("\nImage mask path files:")
-		#print(self.masks)
 
 
 		with open("./dataset/Rellis_3D.yaml", 'r') as stream:
@@ -61,6 +54,7 @@ class Relis3D(torch.utils.data.Dataset):
 			label[temp == k] = v
 		return label
 
+	# Till now did not use this but will use this in future
 	def _eval_get_item(self, img, mask, scales, flip_bool):
 		return_imgs = []
 		for flip in range(int(flip_bool)+1):
@@ -79,53 +73,22 @@ class Relis3D(torch.utils.data.Dataset):
 
 
 	def __getitem__(self, index):
-		img_path, mask_path = self.imgs[index].rstrip(), self.masks[index].rstrip() 
-		#print("img_path path: ", img_path)
-		#print("mask_path path: ", mask_path)
+		img_path, mask_path = self.imgs[index].rstrip(), self.masks[index].rstrip()
+
 		img = Image.open(img_path).convert('RGB')
-		img = img.resize((int(img.size[0]*0.75),int(img.size[1]*0.75)))
+		# img = img.resize((int(img.size[0]*0.75),int(img.size[1]*0.75)))
 		mask = Image.open(mask_path)
-		mask = np.array(mask.resize((int(mask.size[0]*0.75),int(mask.size[1]*0.75))))
+		# mask = np.array(mask.resize((int(mask.size[0]*0.75),int(mask.size[1]*0.75))))
 
+		mask = np.array(mask)
 
-		mask = mask[:, :]
-		print(mask)
+		mask = self.convert_label(mask)
+		mask = mask.astype(np.uint8)
 
-		mask_copy = self.convert_label(mask)
+		img = np.asarray(img)
+		img = img.transpose((2, 0, 1))
 
-		mask = Image.fromarray(mask_copy.astype(np.uint8))
-		# Image Transformations
-
-
-		# if self.joint_transform is not None:
-		# 	img, mask = self.joint_transform(img, mask)
-		if self.transform is not None:
-			img = self.transform(img)
-		if self.target_transform is not None:
-			mask = self.target_transform(mask)
-		if self.mode == 'test':
-			return img, mask, img_name, item['img']
-
-		_edgemap = mask.numpy()
-		_edgemap = edge_utils.mask_to_onehot(_edgemap, num_classes)
-
-		_edgemap = edge_utils.onehot_to_binary_edges(_edgemap, 2, num_classes)
-
-		edgemap = torch.from_numpy(_edgemap).float()
-		# img = torch.from_numpy(img).float()
-		# mask = torch.from_numpy(mask).float()
-
-		# Debug
-		if self.dump_images:
-			outdir = '../../dump_imgs_{}'.format(self.mode)
-			os.makedirs(outdir, exist_ok=True)
-			out_img_fn = os.path.join(outdir, img_name + '.png')
-			out_msk_fn = os.path.join(outdir, img_name + '_mask.png')
-			mask_img = colorize_mask(np.array(mask))
-			img.save(out_img_fn)
-			mask_img.save(out_msk_fn)
-		print(mask)
-		return img, mask, edgemap
+		return torch.as_tensor(img.copy()).float().contiguous(),torch.as_tensor(mask.copy()).long().contiguous()
 
 	def __len__(self):
 		return len(self.imgs)
