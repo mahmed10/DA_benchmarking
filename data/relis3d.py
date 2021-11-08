@@ -13,23 +13,11 @@ def colorize_mask(mask):
 
 
 class Relis3D(torch.utils.data.Dataset):
-	def __init__(self, path_list, train = 'train', data_mode ='rgb', joint_transform=None, sliding_crop=None,
-		transform=None, target_transform=None, dump_images=False, cv_split=None, eval_mode=False, 
-		eval_scales=None, eval_flip=False):
+	def __init__(self, path_list, train = 'train', data_mode ='rgb', scale = 0.5):
 
 		self.mode = train
 		self.data_mode = data_mode
-		self.joint_transform = joint_transform
-		self.sliding_crop = sliding_crop
-		self.transform = transform
-		self.target_transform = target_transform
-		self.dump_images = dump_images
-		self.eval_mode = eval_mode
-		self.eval_flip = eval_flip
-		self.eval_scales = None
-
-		if eval_scales != None:
-			self.eval_scales = [float(scale) for scale in eval_scales.split(",")]
+		self.scale = scale
 
 		with open(path_list, "r") as file:
 			self.imgs = file.readlines()
@@ -46,12 +34,10 @@ class Relis3D(torch.utils.data.Dataset):
 			relis3dyaml = yaml.safe_load(stream)
 		self.learning_map = relis3dyaml['learning_map']
 
-		self.mean_std = ([0.54218053, 0.64250553, 0.56620195], [0.54218052, 0.64250552, 0.56620194])
-
 	def convert_label(self, label, inverse=False):
-		temp = label.copy()
+		temp = label.copy()*255 
 		for k, v in self.learning_map.items():
-			label[temp == k] = v
+			label[temp== k] = v
 		return label
 
 	# Till now did not use this but will use this in future
@@ -76,18 +62,24 @@ class Relis3D(torch.utils.data.Dataset):
 		img_path, mask_path = self.imgs[index].rstrip(), self.masks[index].rstrip()
 
 		img = Image.open(img_path).convert('RGB')
-		# img = img.resize((int(img.size[0]*0.75),int(img.size[1]*0.75)))
 		mask = Image.open(mask_path)
-		# mask = np.array(mask.resize((int(mask.size[0]*0.75),int(mask.size[1]*0.75))))
+
+		w,h = img.size
+		target_w, target_h = int(w * self.scale), int(h * self.scale) 
+		img = img.resize((target_w, target_h))
+		img = transforms.ToTensor()(img)
+
+		mask = mask.resize((target_w, target_h))
+		mask = transforms.ToTensor()(mask)
 
 		mask = np.array(mask)
+		mask = mask [0,:,:]
 
 		mask = self.convert_label(mask)
 		mask = mask.astype(np.uint8)
 
-		img = np.asarray(img)
-		img = img.transpose((2, 0, 1))
-
+		img = np.asarray(img) 
+		
 		return torch.as_tensor(img.copy()).float().contiguous(),torch.as_tensor(mask.copy()).long().contiguous()
 
 	def __len__(self):
