@@ -12,15 +12,19 @@ from tqdm import tqdm
 import data
 
 from models.unet import UNET
+from models.deeplabv2 import get_deeplab_v2
 
 from evaluate import iou_calculation
+from domain_adaptation.train_UDA import train_domain_adaptation
 
 
 parser = argparse.ArgumentParser(description='Benchmarking')
-parser.add_argument('--dataset', type=str, default='rellis3d')
+parser.add_argument('--da_mode', type=str, default='SingleDA')
+parser.add_argument('--source_dataset', type=str, default='rellis3d')
+parser.add_argument('--target_dataset', type=str, default='semantickitti')
 parser.add_argument('--train_mode', type=str, default='train')
-parser.add_argument('--train_path_list', type=str, default='trainlist.txt')
-parser.add_argument('--val_path_list', type=str, default='vallist.txt')
+parser.add_argument('--train_path_list', type=str, default='./dataset/Rellis3d/trainlist.txt')
+parser.add_argument('--val_path_list', type=str, default='./dataset/SemanticKitti/vallist.txt')
 parser.add_argument('--data_mode', type=str, default='rgb')
 parser.add_argument('--model_path', type=str, default='./checkpoints/')
 parser.add_argument('--load_model', type=bool, default=False)
@@ -31,7 +35,7 @@ parser.add_argument('--learning_rate', type=float, default=0.0005)
 
 args = parser.parse_args()
 
-model_path = args.model_path+'SourceOnlyTrain_'+args.dataset
+model_path = args.model_path+args.da_mode+'_Source_'+args.source_dataset+'_Target_'+args.target_dataset
 
 try:
 	os.mkdir(model_path)
@@ -39,7 +43,7 @@ except OSError:
 	print(os.path.abspath(model_path) + ' folder already existed')
 else:
 	print(os.path.abspath(model_path) + ' folder created')
-model_path = args.model_path+'SourceOnlyTrain_'+args.dataset+'/'
+model_path = args.model_path+args.da_mode+'_Source_'+args.source_dataset+'_Target_'+args.target_dataset+'/'
 
 epoches = args.epoches
 
@@ -70,12 +74,13 @@ def train(data, model, optimizer, loss_fn, device):
 def main():
 	global epoch
 	epoch = 0 
-	train_set = data.setup_loaders(args.dataset, args.train_path_list, args.batch_size)
-	val_set = data.setup_loaders(args.dataset, args.val_path_list, args.batch_size)
+	source_loader = data.setup_loaders(args.source_dataset, args.train_path_list, args.batch_size)
+	target_loader = data.setup_loaders(args.target_dataset, args.val_path_list, args.batch_size)
 	print('Data Loaded Successfully!')
 	loss_vals = []
 	train_ious = []
 	val_ious = []
+
 
 	# Defining the model, optimizer and loss function
 	unet = UNET(in_channels=3, classes=10).to(args.device).train()
@@ -112,6 +117,10 @@ def main():
 		# 	'val_iou' : val_ious
 		# }, model_path + 'val_iou_'+args.dataset)
 		print("Epoch completed and model successfully saved!")
+
+	# model = get_deeplab_v2(num_classes=10, multi_level=True)
+	# #model = UNET(in_channels=3, classes=10).to(args.device)
+	# train_domain_adaptation(model, source_loader, target_loader, model_path)
 
 if __name__ == '__main__':
 	main()
