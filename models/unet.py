@@ -22,6 +22,8 @@ class UNET(nn.Module):
         
         self.final_conv = nn.Conv2d(64, classes, kernel_size=1)
 
+        self.final_conv2 = nn.Conv2d(64, classes, kernel_size=1)
+
         
     def __double_conv(self, in_channels, out_channels):
         conv = nn.Sequential(
@@ -54,6 +56,8 @@ class UNET(nn.Module):
             concatenated = torch.cat((concat_layer, x), dim=1)
             x = double_conv_up(concatenated)
             
-        x = self.final_conv(x)
+        x1 = None
+        x2 = self.final_conv(x)
+
         
-        return x 
+        return x1, x2
