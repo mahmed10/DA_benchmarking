@@ -19,15 +19,21 @@ from domain_adaptation.train_UDA import train_domain_adaptation
 
 
 parser = argparse.ArgumentParser(description='Benchmarking')
-parser.add_argument('--da_mode', type=str, default='SingleDA')
+parser.add_argument('--da_mode', type=str, default='SingleDA_SingleBranch_')
 parser.add_argument('--source_dataset', type=str, default='rellis3d')
 parser.add_argument('--target_dataset', type=str, default='semantickitti')
 parser.add_argument('--train_mode', type=str, default='train')
 parser.add_argument('--train_path_list', type=str, default='./dataset/Rellis3d/trainlist.txt')
 parser.add_argument('--val_path_list', type=str, default='./dataset/SemanticKitti/vallist.txt')
 parser.add_argument('--data_mode', type=str, default='rgb')
+parser.add_argument('--in_channels', type=int, default=3)
+parser.add_argument('--image_width', type=int, default=572)
+parser.add_argument('--image_height', type=int, default=572)
+parser.add_argument('--num_classes', type=int, default=10)
 parser.add_argument('--model_path', type=str, default='./checkpoints/')
+parser.add_argument('--model_name', type=str, default='')
 parser.add_argument('--load_model', type=bool, default=False)
+parser.add_argument('--multi_level', type=bool, default=False)
 
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--epoches', type=int, default=100)
@@ -43,7 +49,8 @@ except OSError:
 	print(os.path.abspath(model_path) + ' folder already existed')
 else:
 	print(os.path.abspath(model_path) + ' folder created')
-model_path = args.model_path+args.da_mode+'_Source_'+args.source_dataset+'_Target_'+args.target_dataset+'/'
+args.model_path = args.model_path+args.da_mode+'_Source_'+args.source_dataset+'_Target_'+args.target_dataset+'/'
+del model_path
 
 epoches = args.epoches
 
@@ -74,53 +81,49 @@ def train(data, model, optimizer, loss_fn, device):
 def main():
 	global epoch
 	epoch = 0 
-	source_loader = data.setup_loaders(args.source_dataset, args.train_path_list, args.batch_size)
-	target_loader = data.setup_loaders(args.target_dataset, args.val_path_list, args.batch_size)
+	args.source_loader = data.setup_loaders(args.source_dataset, args.train_path_list, args.batch_size)
+	args.target_loader = data.setup_loaders(args.target_dataset, args.val_path_list, args.batch_size)
 	print('Data Loaded Successfully!')
-	loss_vals = []
-	train_ious = []
-	val_ious = []
 
+	# # Defining the model, optimizer and loss function
+	# unet = UNET(in_channels=3, classes=10).to(args.device).train()
+	# optimizer = optim.Adam(unet.parameters(), lr=args.learning_rate)
+	# loss_function = nn.CrossEntropyLoss(ignore_index=255)
 
-	# Defining the model, optimizer and loss function
-	unet = UNET(in_channels=3, classes=10).to(args.device).train()
-	optimizer = optim.Adam(unet.parameters(), lr=args.learning_rate)
-	loss_function = nn.CrossEntropyLoss(ignore_index=255)
+	# if args.load_model == True:
+	# 	checkpoint = torch.load(model_path)
+	# 	unet.load_state_dict(checkpoint['model_state_dict'])
+	# 	optimizer.load_state_dict(checkpoint['optim_state_dict'])
+	# 	epoch = checkpoint['epoch']+1
+	# 	loss_vals = checkpoint['loss_values']
+	# 	train_ious = checkpoint['train_iou']
+	# 	print("Model successfully loaded!") 
 
-	if args.load_model == True:
-		checkpoint = torch.load(model_path)
-		unet.load_state_dict(checkpoint['model_state_dict'])
-		optimizer.load_state_dict(checkpoint['optim_state_dict'])
-		epoch = checkpoint['epoch']+1
-		loss_vals = checkpoint['loss_values']
-		train_ious = checkpoint['train_iou']
-		print("Model successfully loaded!") 
+	# for e in range(epoch, epoches):
+	# 	print(f'Epoch: {e}')
+	# 	loss_val = train(train_set, unet, optimizer, loss_function, args.device)
+	# 	loss_vals.append(loss_val)
+	# 	iou =  iou_calculation(train_set, unet,args.device)
+	# 	train_ious.append(iou)
+	# 	print('train iou', iou)
+	# 	# iou =  iou_calculation(val_set, unet,args.device)
+	# 	# val_ious.append(iou)
+	# 	# print('val iou', iou)
+	# 	torch.save({
+	# 		'model_state_dict': unet.state_dict(),
+	# 		'optim_state_dict': optimizer.state_dict(),
+	# 		'epoch': e,
+	# 		'loss_values': loss_vals,
+	# 		'train_iou': train_ious
+	# 	}, model_path + 'epoch_'+str(e).zfill(4))
+	# 	# torch.save({
+	# 	# 	'val_iou' : val_ious
+	# 	# }, model_path + 'val_iou_'+args.dataset)
+	# 	print("Epoch completed and model successfully saved!")
 
-	for e in range(epoch, epoches):
-		print(f'Epoch: {e}')
-		loss_val = train(train_set, unet, optimizer, loss_function, args.device)
-		loss_vals.append(loss_val)
-		iou =  iou_calculation(train_set, unet,args.device)
-		train_ious.append(iou)
-		print('train iou', iou)
-		# iou =  iou_calculation(val_set, unet,args.device)
-		# val_ious.append(iou)
-		# print('val iou', iou)
-		torch.save({
-			'model_state_dict': unet.state_dict(),
-			'optim_state_dict': optimizer.state_dict(),
-			'epoch': e,
-			'loss_values': loss_vals,
-			'train_iou': train_ious
-		}, model_path + 'epoch_'+str(e).zfill(4))
-		# torch.save({
-		# 	'val_iou' : val_ious
-		# }, model_path + 'val_iou_'+args.dataset)
-		print("Epoch completed and model successfully saved!")
-
-	# model = get_deeplab_v2(num_classes=10, multi_level=True)
-	# #model = UNET(in_channels=3, classes=10).to(args.device)
-	# train_domain_adaptation(model, source_loader, target_loader, model_path)
+	#model = get_deeplab_v2(num_classes=10, multi_level=True)
+	args.model = UNET(in_channels=args.in_channels, classes=args.num_classes).to(args.device)
+	train_domain_adaptation(args)
 
 if __name__ == '__main__':
 	main()

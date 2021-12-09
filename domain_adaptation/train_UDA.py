@@ -20,15 +20,21 @@ from domain_adaptation.utils.loss import entropy_loss
 from domain_adaptation.utils.func import prob_2_entropy
 from domain_adaptation.utils.viz_segmask import colorize_mask
 
-def train_advent(model, trainloader, targetloader, model_path):
-	''' UDA training with advent
-	'''
-	# Create the model and start the training.
-	input_size_source = (572,572)
-	input_size_target = (572,572)
-	device = 'cuda:0'
-	num_classes = 10
+from evaluate import iou_calculation
 
+def train_advent(args):
+	#setting up variables
+	model = args.model
+	trainloader = args.source_loader
+	targetloader = args.target_loader
+	model_path = args.model_path
+	device = args.device
+	num_classes = args.num_classes
+	input_size_source = (args.image_width,args.image_height)
+	input_size_target = (args.image_width,args.image_height)
+	multi_level = args.multi_level
+
+	# Create the model and start the training.
 	# SEGMNETATION NETWORK
 	model.train()
 	model.to(device)
@@ -65,10 +71,15 @@ def train_advent(model, trainloader, targetloader, model_path):
 	source_label = 0
 	target_label = 1
 	# import pdb; pdb.set_trace()
-	for e_epoch in tqdm(range(30)):
+	train_ious = []
+	val_ious = []
+	for e_epoch in tqdm(range(args.epoches)):
 		trainloader_iter = enumerate(trainloader)
 		targetloader_iter = enumerate(targetloader)
-		for i_iter in tqdm(range(200)):
+		train_iou = 0
+		val_iou = 0
+		# for i_iter in tqdm(range(len(trainloader))):
+		for i_iter in tqdm(range(1000)):
 		# reset optimizers
 			optimizer.zero_grad()
 			optimizer_d_aux.zero_grad()
@@ -87,9 +98,13 @@ def train_advent(model, trainloader, targetloader, model_path):
 			# train on source
 			_, batch = trainloader_iter.__next__()
 			images_source, labels = batch
+			train_iou += iou_calculation(batch, model, device)
 			pred_src_aux, pred_src_main = model(images_source.cuda(device))
-			pred_src_aux = interp(pred_src_aux)
-			loss_seg_src_aux = loss_calc(pred_src_aux, labels, device)
+			if multi_level:
+				pred_src_aux = interp(pred_src_aux)
+				loss_seg_src_aux = loss_calc(pred_src_aux, labels, device)
+			else:
+				loss_seg_src_aux = 0
 			pred_src_main = interp(pred_src_main)
 			loss_seg_src_main = loss_calc(pred_src_main, labels, device)
 			loss = (1.0 * loss_seg_src_main + 0.1 * loss_seg_src_aux)
@@ -98,10 +113,14 @@ def train_advent(model, trainloader, targetloader, model_path):
 			# adversarial training ot fool the discriminator
 			_, batch = targetloader_iter.__next__()
 			images, _= batch
+			val_iou += iou_calculation(batch, model, device)
 			pred_trg_aux, pred_trg_main = model(images.cuda(device))
-			pred_trg_aux = interp_target(pred_trg_aux)
-			d_out_aux = d_aux(prob_2_entropy(F.softmax(pred_trg_aux)))
-			loss_adv_trg_aux = bce_loss(d_out_aux, source_label)
+			if multi_level:
+				pred_trg_aux = interp_target(pred_trg_aux)
+				d_out_aux = d_aux(prob_2_entropy(F.softmax(pred_trg_aux)))
+				loss_adv_trg_aux = bce_loss(d_out_aux, source_label)
+			else:
+				loss_adv_trg_aux = 0
 			pred_trg_main = interp_target(pred_trg_main)
 			d_out_main = d_main(prob_2_entropy(F.softmax(pred_trg_main)))
 			loss_adv_trg_main = bce_loss(d_out_main, source_label)
@@ -116,11 +135,12 @@ def train_advent(model, trainloader, targetloader, model_path):
 			for param in d_main.parameters():
 				param.requires_grad = True
 			# train with source
-			pred_src_aux = pred_src_aux.detach()
-			d_out_aux = d_aux(prob_2_entropy(F.softmax(pred_src_aux)))
-			loss_d_aux = bce_loss(d_out_aux, source_label)
-			loss_d_aux = loss_d_aux / 2
-			loss_d_aux.backward()
+			if multi_level:
+				pred_src_aux = pred_src_aux.detach()
+				d_out_aux = d_aux(prob_2_entropy(F.softmax(pred_src_aux)))
+				loss_d_aux = bce_loss(d_out_aux, source_label)
+				loss_d_aux = loss_d_aux / 2
+				loss_d_aux.backward()
 			pred_src_main = pred_src_main.detach()
 			d_out_main = d_main(prob_2_entropy(F.softmax(pred_src_main)))
 			loss_d_main = bce_loss(d_out_main, source_label)
@@ -128,11 +148,14 @@ def train_advent(model, trainloader, targetloader, model_path):
 			loss_d_main.backward()
 
 			# train with target
-			pred_trg_aux = pred_trg_aux.detach()
-			d_out_aux = d_aux(prob_2_entropy(F.softmax(pred_trg_aux)))
-			loss_d_aux = bce_loss(d_out_aux, target_label)
-			loss_d_aux = loss_d_aux / 2
-			loss_d_aux.backward()
+			if multi_level:
+				pred_trg_aux = pred_trg_aux.detach()
+				d_out_aux = d_aux(prob_2_entropy(F.softmax(pred_trg_aux)))
+				loss_d_aux = bce_loss(d_out_aux, target_label)
+				loss_d_aux = loss_d_aux / 2
+				loss_d_aux.backward()
+			else:
+				loss_d_aux = 0
 			pred_trg_main = pred_trg_main.detach()
 			d_out_main = d_main(prob_2_entropy(F.softmax(pred_trg_main)))
 			loss_d_main = bce_loss(d_out_main, target_label)
@@ -149,20 +172,23 @@ def train_advent(model, trainloader, targetloader, model_path):
 							'loss_adv_trg_main': loss_adv_trg_main,
 							'loss_d_aux': loss_d_aux,
 							'loss_d_main': loss_d_main}
-			print_losses(current_losses, i_iter)
-			torch.save({
-				'model_state_dict': model.state_dict(),
-				'optim_state_dict': optimizer.state_dict(),
-				'epoch': e_epoch,
-				'iteration': i_iter,
-				'loss_seg_src_aux': loss_seg_src_aux,
-				'loss_seg_src_main': loss_seg_src_main,
-				'loss_adv_trg_aux': loss_adv_trg_aux,
-				'loss_adv_trg_main': loss_adv_trg_main,
-				'loss_d_aux': loss_d_aux,
-				'loss_d_main': loss_d_main
-			}, model_path + 'e_'+str(e_epoch).zfill(4)+ 'i_'+str(i_iter).zfill(4))
+			#print_losses(current_losses, i_iter)
+
 			sys.stdout.flush()
+		train_ious.append(train_iou/1000)
+		print('train_ious', train_ious)
+		val_ious.append(val_iou/1000)
+		print('val_ious', val_ious)
+
+		torch.save({
+			'model_state_dict': model.state_dict(),
+			'd_main_state_dict': d_main.state_dict(),
+			'd_aux_state_dict': d_aux.state_dict(),
+			'optim_state_dict': optimizer.state_dict(),
+			'epoch': e_epoch,
+			'train_iou': train_ious,
+			'val_iou' : val_ious
+		}, model_path + 'e_'+str(e_epoch).zfill(4))
 
 def print_losses(current_losses, i_iter):
 	list_strings = []
@@ -180,6 +206,6 @@ def to_numpy(tensor):
 		return tensor.data.cpu().numpy()
 
 
-def train_domain_adaptation(model, trainloader, targetloader, model_path):
-	print(model_path)
-	train_advent(model, trainloader, targetloader, model_path)
+def train_domain_adaptation(args):
+	print(args.model_path)
+	train_advent(args)
