@@ -6,6 +6,7 @@ class UNET(nn.Module):
     
     def __init__(self, in_channels=3, classes=1):
         super(UNET, self).__init__()
+        self.classes = classes
         self.layers = [in_channels, 64, 128, 256, 512, 1024]
         
         self.double_conv_downs = nn.ModuleList(
