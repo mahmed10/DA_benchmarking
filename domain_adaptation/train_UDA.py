@@ -33,6 +33,7 @@ def train_advent(args):
 	input_size_source = (args.image_width,args.image_height)
 	input_size_target = (args.image_width,args.image_height)
 	multi_level = args.multi_level
+	train_data_size = len(trainloader) if args.train_data_size == 0 else args.train_data_size
 
 	# Create the model and start the training.
 	# SEGMNETATION NETWORK
@@ -63,6 +64,22 @@ def train_advent(args):
 	optimizer_d_aux = optim.Adam(d_aux.parameters(), lr=1e-4, betas=(0.9, 0.99))
 	optimizer_d_main = optim.Adam(d_main.parameters(), lr=1e-4, betas=(0.9, 0.99))
 
+	#load model
+	train_ious = []
+	val_ious = []
+	if args.load_model == True:
+		checkpoint = torch.load(model_path+'e_'+str(args.start_epoches-1).zfill(4))
+		model.load_state_dict(checkpoint['model_state_dict'])
+		d_main.load_state_dict(checkpoint['d_main_state_dict'])
+		d_aux.load_state_dict(checkpoint['d_aux_state_dict'])
+		optimizer.load_state_dict(checkpoint['optim_state_dict'])
+		optimizer_d_aux.load_state_dict(checkpoint['optim_d_aux_dict'])
+		optimizer_d_main.load_state_dict(checkpoint['optim_d_main_dict'])
+		strating_epoch = checkpoint['epoch']+1
+		train_ious = checkpoint['train_iou']
+		val_ious = checkpoint['val_iou']
+		print("Model successfully loaded!")
+
 	# interpolate output segmaps
 	interp = nn.Upsample(size=(input_size_source[1], input_size_source[0]), mode='bilinear', align_corners=True)
 	interp_target = nn.Upsample(size=(input_size_target[1], input_size_target[0]), mode='bilinear', align_corners=True)
@@ -71,15 +88,14 @@ def train_advent(args):
 	source_label = 0
 	target_label = 1
 	# import pdb; pdb.set_trace()
-	train_ious = []
-	val_ious = []
 	for e_epoch in tqdm(range(args.epoches)):
+		if (e_epoch <strating_epoch):
+			continue
 		trainloader_iter = enumerate(trainloader)
 		targetloader_iter = enumerate(targetloader)
 		train_iou = 0
 		val_iou = 0
-		# for i_iter in tqdm(range(len(trainloader))):
-		for i_iter in tqdm(range(1000)):
+		for i_iter in tqdm(range(train_data_size)):
 		# reset optimizers
 			optimizer.zero_grad()
 			optimizer_d_aux.zero_grad()
@@ -175,9 +191,9 @@ def train_advent(args):
 			#print_losses(current_losses, i_iter)
 
 			sys.stdout.flush()
-		train_ious.append(train_iou/1000)
+		train_ious.append(train_iou/train_data_size)
 		print('train_ious', train_ious)
-		val_ious.append(val_iou/1000)
+		val_ious.append(val_iou/train_data_size)
 		print('val_ious', val_ious)
 
 		torch.save({
@@ -185,6 +201,8 @@ def train_advent(args):
 			'd_main_state_dict': d_main.state_dict(),
 			'd_aux_state_dict': d_aux.state_dict(),
 			'optim_state_dict': optimizer.state_dict(),
+			'optim_d_aux_dict': optimizer_d_aux.state_dict(),
+			'optim_d_main_dict': optimizer_d_main.state_dict(),
 			'epoch': e_epoch,
 			'train_iou': train_ious,
 			'val_iou' : val_ious
