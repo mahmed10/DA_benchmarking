@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from PIL import Image
 import yaml
+import matplotlib.pyplot as plt
 
 from torchvision import transforms, datasets
 
@@ -32,7 +33,7 @@ class Relis3D(torch.utils.data.Dataset):
 		]
 
 
-		with open("./dataset/Rellis3d/Rellis_3D.yaml", 'r') as stream:
+		with open("./dataset/Rellis3d/Rellis_3D_copy.yaml", 'r') as stream:
 			relis3dyaml = yaml.safe_load(stream)
 		self.learning_map = relis3dyaml['learning_map']
 
@@ -65,6 +66,8 @@ class Relis3D(torch.utils.data.Dataset):
 
 		img = Image.open(img_path).convert('RGB')
 		mask = Image.open(mask_path)
+		# if(index == 0):
+		# 	plt.imshow(img)
 
 		w,h = img.size
 		target_w, target_h = int(w * self.scale), int(h * self.scale) 

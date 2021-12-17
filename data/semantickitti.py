@@ -26,7 +26,7 @@ class SemanticKitti(torch.utils.data.Dataset):
 		]
 
 
-		with open("./dataset/SemanticKitti/semanticKitti.yaml", 'r') as stream:
+		with open("./dataset/SemanticKitti/semanticKitti_copy.yaml", 'r') as stream:
 			relis3dyaml = yaml.safe_load(stream)
 		self.learning_map = relis3dyaml['learning_map']
 
