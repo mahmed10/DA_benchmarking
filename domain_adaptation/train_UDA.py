@@ -33,6 +33,7 @@ def train_advent(args):
 	input_size_source = (args.image_width,args.image_height)
 	input_size_target = (args.image_width,args.image_height)
 	multi_level = args.multi_level
+	strating_epoch = 0
 	train_data_size = len(trainloader) if args.train_data_size == 0 else args.train_data_size
 
 	# Create the model and start the training.
@@ -56,7 +57,7 @@ def train_advent(args):
 	# OPTIMIZERS
 	# segnet's optimizer
 	optimizer = optim.SGD(model.parameters(),
-						lr=2.5e-4,
+						lr=0.001, #2.5e-4,
 						momentum=0.9,
 						weight_decay=0.00005)
 
@@ -128,8 +129,11 @@ def train_advent(args):
 
 			# adversarial training ot fool the discriminator
 			_, batch = targetloader_iter.__next__()
-			images, _= batch
-			val_iou += iou_calculation(batch, model, device)
+			if (args.train_mode == 'train'):
+				images, _= batch
+			elif (args.train_mode == 'test'):
+				images= batch
+			val_iou += iou_calculation(batch, model, device) if args.train_mode == 'train' else 0
 			pred_trg_aux, pred_trg_main = model(images.cuda(device))
 			if multi_level:
 				pred_trg_aux = interp_target(pred_trg_aux)
